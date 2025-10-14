@@ -1,7 +1,15 @@
 name: notifier_scope
-description: "A new Flutter package project."
-version: 0.0.1
-homepage:
+description: "A Flutter state management package providing scoped and global notifiers with automatic lifecycle management."
+version: 0.1.0
+homepage: https://github.com/p424p242/flutter_package_notifier_scope
+repository: https://github.com/p424p242/flutter_package_notifier_scope.git
+issue_tracker: https://github.com/p424p242/flutter_package_notifier_scope/issues
+topics:
+  - flutter
+  - state-management
+  - notifier
+  - scoped-state
+  - global-state
 
 environment:
   sdk: ^3.9.2
