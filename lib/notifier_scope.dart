@@ -2,16 +2,24 @@ library;
 
 import 'package:flutter/widgets.dart';
 
-abstract class StateNotifier extends ChangeNotifier {
-  StateNotifier() {
+abstract class StateNotifier<T> extends ChangeNotifier {
+  StateNotifier(this._state) {
     init();
   }
 
-  bool _disposed = false;
+  set state(T value) {
+    if (_state == value) return;
+    _state = value;
+    notifyListeners();
+  }
 
+  T _state;
+  T get state => _state;
+
+  bool _disposed = false;
   bool get isDisposed => _disposed;
 
-  Future<void> init();
+  init() {}
 
   @override
   void dispose() {
