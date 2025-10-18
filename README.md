@@ -135,7 +135,31 @@ NotifierBuilder(
 
 ## Advanced Usage 🚀
 
-### Error Handling with Result Pattern
+### Functional Programming with Result Extension Methods
+
+NotifierScope works beautifully with the `flutter_package_result` extension methods for clean, functional state management:
+
+#### Available Extension Methods
+
+- `.onOk(void Function(O) op)`: Perform side effects on success
+- `.onError(void Function(E) op)`: Perform side effects on error
+- `.map<O2>(O2 Function(O) op)`: Transform success values
+- `.mapError<E2>(E2 Function(E) op)`: Transform error values
+- `.andThen<O2>(Result<O2, E> Function(O) op)`: Chain operations
+- `.getOrElse(O Function(E) orElse)`: Get value or compute default
+
+#### Service Layer Example
+
+```dart
+class TodoService {
+  AsyncResult<List<Todo>, TodoServiceError> getTodos() async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    return Ok(List.unmodifiable(_todos));
+  }
+}
+```
+
+### Error Handling with Result Pattern & Extension Methods
 
 ```dart
 class CounterNotifier extends StateNotifier<CounterState> {
@@ -143,19 +167,15 @@ class CounterNotifier extends StateNotifier<CounterState> {
     state = state.copyWith(isIncrementing: true);
 
     final result = await someService.updateCount();
-    switch (result) {
-      case Ok<int, ServiceError>(:final value):
-        state = state.copyWith(isIncrementing: false, count: value);
-        return Ok(null);
-      case Error<int, ServiceError>():
-        state = state.copyWith(isIncrementing: false);
-        return Error(CounterError.incrementFailed);
-    }
+    return result
+        .onOk((value) => state = state.copyWith(isIncrementing: false, count: value))
+        .onError((_) => state = state.copyWith(isIncrementing: false))
+        .mapError((_) => CounterError.incrementFailed);
   }
 }
 ```
 
-### Service Integration
+### Service Integration with Functional Composition
 
 ```dart
 class CounterNotifier extends StateNotifier<CounterState> {
@@ -163,14 +183,11 @@ class CounterNotifier extends StateNotifier<CounterState> {
     state = state.copyWith(isLoading: true);
 
     final service = GetIt.instance.get<CounterService>();
-    switch (await service.getCount()) {
-      case Ok<int, ServiceError>(:final value):
-        state = state.copyWith(isLoading: false, count: value);
-        return Ok(null);
-      case Error<int, ServiceError>():
-        state = state.copyWith(isLoading: false);
-        return Error(CounterError.loadFailed);
-    }
+    final result = await service.getCount();
+    return result
+        .onOk((value) => state = state.copyWith(isLoading: false, count: value))
+        .onError((_) => state = state.copyWith(isLoading: false))
+        .mapError((_) => CounterError.loadFailed);
   }
 }
 ```
@@ -219,7 +236,13 @@ class CounterNotifier extends StateNotifier<CounterState> {
   // ════════════════════════════════════════════════════════════════════════
 
   AsyncResult<Null, CounterError> increment() async {
-    // Implementation
+    state = state.copyWith(isIncrementing: true);
+
+    final result = await someService.updateCount();
+    return result
+        .onOk((value) => state = state.copyWith(isIncrementing: false, count: value))
+        .onError((_) => state = state.copyWith(isIncrementing: false))
+        .mapError((_) => CounterError.incrementFailed);
   }
 }
 
@@ -280,10 +303,11 @@ class NotifierBuilder extends StatefulWidget {
 Check out the comprehensive example in the `example/` directory that demonstrates:
 
 - Global vs scoped notifier behavior
-- Theme management
-- Counter functionality
-- Navigation between pages
-- Error handling patterns
+- Todo application with modern architecture
+- Integration with `flutter_package_result` extension methods
+- Functional programming patterns with `.onOk()`, `.onError()`, `.map()`
+- Clean separation of services, notifiers, and UI layers
+- Automatic lifecycle management
 
 ## Contributing 🤝
 
