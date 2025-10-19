@@ -7,11 +7,40 @@ class TodoListPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return NotifierBuilder((context) {
+    return NotifierBuilder(
+      (context) {
         final todoNotifier = todoNotifierScoped.instance;
-        final todos = todoNotifier.state.todos;
-        final isLoading = todoNotifier.state.isLoading;
+        final state = todoNotifier.state;
 
+        // Handle initialization state
+        if (!state.isInitialised && state.isLoadingTodos) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (!state.isInitialised) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Todos')),
+            body: const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 64, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text('Failed to load todos'),
+                  SizedBox(height: 8),
+                  Text(
+                    'Please check your connection and try again',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final todos = state.todos;
         return Scaffold(
           appBar: AppBar(
             title: const Text('Todo List'),
@@ -20,7 +49,7 @@ class TodoListPage extends StatelessWidget {
           ),
           body: Container(
             padding: const EdgeInsets.all(16),
-            child: isLoading
+            child: state.isLoadingTodos
                 ? const Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -32,89 +61,123 @@ class TodoListPage extends StatelessWidget {
                     ),
                   )
                 : todos.isEmpty
-                    ? const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.checklist_rounded,
-                              size: 64,
-                              color: Colors.grey,
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              'No todos yet!',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.grey,
-                              ),
-                            ),
-                            SizedBox(height: 8),
-                            Text(
-                              'Tap the + button to add your first todo',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.checklist_rounded,
+                          size: 64,
+                          color: Colors.grey,
                         ),
-                      )
-                    : ListView.separated(
-                        itemCount: todos.length,
-                        separatorBuilder: (context, index) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) {
-                          final todo = todos[index];
-                          return Card(
-                            elevation: 2,
-                            margin: EdgeInsets.zero,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              child: Row(
-                                children: [
-                                  Checkbox(
-                                    value: todo.isCompleted,
-                                    onChanged: (value) {
-                                      todoNotifier.toggleTodoStatus(todo.id);
-                                    },
+                        SizedBox(height: 16),
+                        Text(
+                          'No todos yet!',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Tap the + button to add your first todo',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.separated(
+                    itemCount: todos.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final todo = todos[index];
+                      return Card(
+                        elevation: 2,
+                        margin: EdgeInsets.zero,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          child: Row(
+                            children: [
+                              if (state.isTogglingTodo)
+                                const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              else
+                                Checkbox(
+                                  value: todo.isCompleted,
+                                  onChanged: state.isAddingTodo || state.isDeletingTodo
+                                      ? null
+                                      : (value) {
+                                          todoNotifier.toggleTodoStatus(todo.id);
+                                        },
+                                ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  todo.title,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    decoration: todo.isCompleted
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                    color: todo.isCompleted
+                                        ? Colors.grey
+                                        : Theme.of(
+                                            context,
+                                          ).colorScheme.onSurface,
                                   ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      todo.title,
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        decoration: todo.isCompleted
-                                            ? TextDecoration.lineThrough
-                                            : null,
-                                        color: todo.isCompleted
-                                            ? Colors.grey
-                                            : Theme.of(context).colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline),
-                                    color: Colors.red.shade400,
-                                    onPressed: () {
-                                      todoNotifier.removeTodo(todo.id);
-                                    },
-                                  ),
-                                ],
+                                ),
                               ),
-                            ),
-                          );
-                        },
-                      ),
+                              if (state.isDeletingTodo)
+                                const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              else
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline),
+                                  color: Colors.red.shade400,
+                                  onPressed: state.isAddingTodo || state.isTogglingTodo
+                                      ? null
+                                      : () {
+                                          todoNotifier.removeTodo(todo.id);
+                                        },
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
           ),
           floatingActionButton: FloatingActionButton.extended(
-            onPressed: () {
-              _showAddTodoDialog(context, todoNotifier);
-            },
-            icon: const Icon(Icons.add),
-            label: const Text('Add Todo'),
-            backgroundColor: Theme.of(context).colorScheme.primary,
+            onPressed: state.isAddingTodo || state.isDeletingTodo || state.isTogglingTodo
+                ? null
+                : () {
+                    _showAddTodoDialog(context, todoNotifier);
+                  },
+            icon: state.isAddingTodo
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.add),
+            label: state.isAddingTodo ? const Text('Adding...') : const Text('Add Todo'),
+            backgroundColor: state.isAddingTodo || state.isDeletingTodo || state.isTogglingTodo
+                ? Colors.grey
+                : Theme.of(context).colorScheme.primary,
             foregroundColor: Theme.of(context).colorScheme.onPrimary,
           ),
         );
@@ -144,7 +207,10 @@ class TodoListPage extends StatelessWidget {
                 decoration: const InputDecoration(
                   hintText: 'What needs to be done?',
                   border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                 ),
                 autofocus: true,
                 maxLines: 2,
@@ -171,11 +237,11 @@ class TodoListPage extends StatelessWidget {
                 backgroundColor: Theme.of(context).colorScheme.primary,
                 foregroundColor: Theme.of(context).colorScheme.onPrimary,
               ),
-              onPressed: () {
+              onPressed: () async {
                 final title = controller.text.trim();
                 if (title.isNotEmpty) {
-                  todoNotifier.addTodo(title);
-                  Navigator.of(context).pop();
+                  await todoNotifier.addTodo(title);
+                  if (context.mounted) Navigator.of(context).pop();
                 }
               },
               child: const Text('Add Todo'),

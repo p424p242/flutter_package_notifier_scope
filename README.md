@@ -1,6 +1,6 @@
 # Notifier Scope 🎯
 
-A Flutter state management package providing scoped and global notifiers with automatic lifecycle management.
+A Flutter state management package providing scoped and global notifiers with automatic lifecycle management, designed for modern Flutter applications with functional programming patterns.
 
 ## Features ✨
 
@@ -9,6 +9,9 @@ A Flutter state management package providing scoped and global notifiers with au
 - **🔄 Automatic Lifecycle Management** - No manual disposal required
 - **📱 Reactive Updates** - Built-in ChangeNotifier integration
 - **🎯 Type Safety** - Generic state management with compile-time safety
+- **🧩 Functional Programming** - Seamless integration with `flutter_package_result` extension methods
+- **⚡ Granular Loading States** - Fine-grained control over different operation states
+- **🚀 Async Initialization** - Built-in support for async notifier initialization
 
 ## Quick Start 🚀
 
@@ -19,29 +22,59 @@ dependencies:
   notifier_scope: ^0.1.0
 ```
 
-### 2. Create a StateNotifier
+### 2. Create a StateNotifier with Granular Loading States
 
 ```dart
 class CounterState {
-  CounterState({required this.count, required this.isIncrementing});
-  final int? count;
-  final bool isIncrementing;
+  CounterState({
+    this.count = 0,
+    this.isInitialised = false,
+    this.isIncrementing = false,
+    this.isDecrementing = false,
+  });
 
-  copyWith({int? count, bool? isIncrementing}) => CounterState(
+  final int count;
+  final bool isInitialised;
+  final bool isIncrementing;
+  final bool isDecrementing;
+
+  CounterState copyWith({
+    int? count,
+    bool? isInitialised,
+    bool? isIncrementing,
+    bool? isDecrementing,
+  }) => CounterState(
     count: count ?? this.count,
+    isInitialised: isInitialised ?? this.isInitialised,
     isIncrementing: isIncrementing ?? this.isIncrementing,
+    isDecrementing: isDecrementing ?? this.isDecrementing,
   );
 }
 
 class CounterNotifier extends StateNotifier<CounterState> {
-  CounterNotifier() : super(CounterState(count: null, isIncrementing: false));
+  CounterNotifier() : super(CounterState());
+
+  @override
+  Future<void> init() async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    state = state.copyWith(isInitialised: true);
+  }
 
   Future<void> increment() async {
     state = state.copyWith(isIncrementing: true);
-    await Future.delayed(Duration(seconds: 1));
+    await Future.delayed(const Duration(milliseconds: 500));
     state = state.copyWith(
       isIncrementing: false,
-      count: (state.count ?? 0) + 1,
+      count: state.count + 1,
+    );
+  }
+
+  Future<void> decrement() async {
+    state = state.copyWith(isDecrementing: true);
+    await Future.delayed(const Duration(milliseconds: 500));
+    state = state.copyWith(
+      isDecrementing: false,
+      count: state.count - 1,
     );
   }
 }
@@ -57,7 +90,7 @@ final globalCounter = NotifierScope.global(CounterNotifier());
 final scopedCounter = NotifierScope.scoped(() => CounterNotifier());
 ```
 
-### 4. Use in Your Widgets
+### 4. Use in Your Widgets with Async Initialization
 
 ```dart
 class CounterPage extends StatelessWidget {
@@ -66,25 +99,55 @@ class CounterPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return NotifierBuilder(
-      (context) => Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text('Global: ${globalCounter.instance.state.count}'),
-              Text('Scoped: ${scopedCounter.instance.state.count}'),
-              ElevatedButton(
-                onPressed: globalCounter.instance.increment,
-                child: Text('Increment Global'),
-              ),
-              ElevatedButton(
-                onPressed: scopedCounter.instance.increment,
-                child: Text('Increment Scoped'),
-              ),
-            ],
+      (context) {
+        final counter = scopedCounter.instance;
+        final state = counter.state;
+
+        // Handle initialization state
+        if (!state.isInitialised) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        return Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('Count: ${state.count}'),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ElevatedButton(
+                      onPressed: state.isIncrementing ? null : counter.increment,
+                      child: state.isIncrementing
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Increment'),
+                    ),
+                    const SizedBox(width: 16),
+                    ElevatedButton(
+                      onPressed: state.isDecrementing ? null : counter.decrement,
+                      child: state.isDecrementing
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Decrement'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -137,24 +200,37 @@ NotifierBuilder(
 
 ### Functional Programming with Result Extension Methods
 
-NotifierScope works beautifully with the `flutter_package_result` extension methods for clean, functional state management:
+NotifierScope works beautifully with the `flutter_package_result` extension methods for clean, functional state management. **Always prefer extension methods over Dart pattern matching** for cleaner, more maintainable code.
 
-#### Available Extension Methods
-
-- `.onOk(void Function(O) op)`: Perform side effects on success
-- `.onError(void Function(E) op)`: Perform side effects on error
-- `.map<O2>(O2 Function(O) op)`: Transform success values
-- `.mapError<E2>(E2 Function(E) op)`: Transform error values
-- `.andThen<O2>(Result<O2, E> Function(O) op)`: Chain operations
-- `.getOrElse(O Function(E) orElse)`: Get value or compute default
-
-#### Service Layer Example
+#### Service Layer Example with Functional Composition
 
 ```dart
 class TodoService {
+  final List<Todo> _todos = [];
+
   AsyncResult<List<Todo>, TodoServiceError> getTodos() async {
     await Future.delayed(const Duration(milliseconds: 500));
     return Ok(List.unmodifiable(_todos));
+  }
+
+  AsyncResult<Todo, TodoServiceError> addTodo(String title) async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    final newTodo = Todo.create(title: title);
+    _todos.add(newTodo);
+    return Ok(newTodo);
+  }
+
+  AsyncResult<Todo, TodoServiceError> toggleTodoStatus(String id) async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    final index = _todos.indexWhere((todo) => todo.id == id);
+
+    if (index == -1) return Error(TodoServiceError.notFound);
+
+    final updatedTodo = _todos[index].copyWith(
+      isCompleted: !_todos[index].isCompleted,
+    );
+    _todos[index] = updatedTodo;
+    return Ok(updatedTodo);
   }
 }
 ```
@@ -162,32 +238,41 @@ class TodoService {
 ### Error Handling with Result Pattern & Extension Methods
 
 ```dart
-class CounterNotifier extends StateNotifier<CounterState> {
-  AsyncResult<Null, CounterError> increment() async {
-    state = state.copyWith(isIncrementing: true);
+class TodoNotifier extends StateNotifier<TodoState> {
+  TodoNotifier(super.state);
 
-    final result = await someService.updateCount();
-    return result
-        .onOk((value) => state = state.copyWith(isIncrementing: false, count: value))
-        .onError((_) => state = state.copyWith(isIncrementing: false))
-        .mapError((_) => CounterError.incrementFailed);
+  final _todoService = GetIt.instance<TodoService>();
+
+  @override
+  Future<void> init() async {
+    await getTodos();
   }
-}
-```
 
-### Service Integration with Functional Composition
+  AsyncResult<List<Todo>, TodoNotifierError> getTodos() async {
+    state = state.copyWith(isLoadingTodos: true);
+    final serviceResult = await _todoService.getTodos();
+    return serviceResult
+        .onOk((todos) => state = state.copyWith(
+              todos: todos,
+              isInitialised: true,
+              isLoadingTodos: false,
+            ))
+        .onError((_) => state = state.copyWith(isLoadingTodos: false))
+        .mapError((_) => TodoNotifierError.getTodosError);
+  }
 
-```dart
-class CounterNotifier extends StateNotifier<CounterState> {
-  AsyncResult<Null, CounterError> loadData() async {
-    state = state.copyWith(isLoading: true);
-
-    final service = GetIt.instance.get<CounterService>();
-    final result = await service.getCount();
-    return result
-        .onOk((value) => state = state.copyWith(isLoading: false, count: value))
-        .onError((_) => state = state.copyWith(isLoading: false))
-        .mapError((_) => CounterError.loadFailed);
+  AsyncResult<Todo, TodoNotifierError> addTodo(String title) async {
+    state = state.copyWith(isAddingTodo: true);
+    final serviceResult = await _todoService.addTodo(title);
+    return serviceResult
+        .onOk(
+          (todo) => state = state.copyWith(
+            todos: [...state.todos, todo],
+            isAddingTodo: false,
+          ),
+        )
+        .onError((_) => state = state.copyWith(isAddingTodo: false))
+        .mapError((_) => TodoNotifierError.addTodoError);
   }
 }
 ```
@@ -198,7 +283,7 @@ class CounterNotifier extends StateNotifier<CounterState> {
 
 ```
 lib/
-├── notifiers/           # State notifiers (.notifier.dart)
+├── notifiers/           # Business logic state notifiers (.notifier.dart)
 ├── services/            # Business logic services (.service.dart)
 ├── pages/               # Full page widgets (.page.dart)
 ├── widgets/             # Reusable UI components (.widget.dart)
@@ -206,43 +291,110 @@ lib/
 └── main.dart            # Application entry point
 ```
 
-### Example Notifier Structure
+### Business Logic vs Page-Specific Notifiers
+
+**Business Logic Notifiers** (in `notifiers/` directory):
+- Handle core application logic and data
+- Manage state that represents business entities
+- Use `NotifierScope.global()` for app-wide state
+- Use `NotifierScope.scoped()` for page-specific business state
+
+**Page-Specific Notifiers** (in `pages/` directory):
+- Handle UI-specific state and presentation logic
+- Manage temporary UI state like form validation, dialogs, etc.
+- Always use `NotifierScope.scoped()` for automatic disposal
+- Can access business logic notifiers independently
+
+### Example Notifier Structure with Granular Loading States
 
 ```dart
 // ══════════════════════════════════════════════════════════════════════════
 //  STATE MODEL
 // ══════════════════════════════════════════════════════════════════════════
 
-class CounterState {
-  CounterState({required this.count, required this.isIncrementing});
-  final int? count;
-  final bool isIncrementing;
+class TodoState {
+  TodoState({
+    this.todos = const [],
+    this.isInitialised = false,
+    this.isLoadingTodos = false,
+    this.isAddingTodo = false,
+    this.isTogglingTodo = false,
+    this.isDeletingTodo = false,
+  });
 
-  copyWith({int? count, bool? isIncrementing}) => CounterState(
-    count: count ?? this.count,
-    isIncrementing: isIncrementing ?? this.isIncrementing,
-  );
+  final List<Todo> todos;
+  final bool isInitialised;
+  final bool isLoadingTodos;
+  final bool isAddingTodo;
+  final bool isTogglingTodo;
+  final bool isDeletingTodo;
+
+  TodoState copyWith({
+    List<Todo>? todos,
+    bool? isInitialised,
+    bool? isLoadingTodos,
+    bool? isAddingTodo,
+    bool? isTogglingTodo,
+    bool? isDeletingTodo,
+  }) {
+    return TodoState(
+      todos: todos ?? this.todos,
+      isInitialised: isInitialised ?? this.isInitialised,
+      isLoadingTodos: isLoadingTodos ?? this.isLoadingTodos,
+      isAddingTodo: isAddingTodo ?? this.isAddingTodo,
+      isTogglingTodo: isTogglingTodo ?? this.isTogglingTodo,
+      isDeletingTodo: isDeletingTodo ?? this.isDeletingTodo,
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════
 //  NOTIFIER
 // ══════════════════════════════════════════════════════════════════════════
 
-class CounterNotifier extends StateNotifier<CounterState> {
-  CounterNotifier() : super(CounterState(count: null, isIncrementing: false));
+class TodoNotifier extends StateNotifier<TodoState> {
+  TodoNotifier(super.state);
+
+  final _todoService = GetIt.instance<TodoService>();
 
   // ════════════════════════════════════════════════════════════════════════
-  //  METHODS
+  //  INITIALIZATION
   // ════════════════════════════════════════════════════════════════════════
 
-  AsyncResult<Null, CounterError> increment() async {
-    state = state.copyWith(isIncrementing: true);
+  @override
+  Future<void> init() async {
+    await getTodos();
+  }
 
-    final result = await someService.updateCount();
-    return result
-        .onOk((value) => state = state.copyWith(isIncrementing: false, count: value))
-        .onError((_) => state = state.copyWith(isIncrementing: false))
-        .mapError((_) => CounterError.incrementFailed);
+  // ════════════════════════════════════════════════════════════════════════
+  //  METHODS WITH GRANULAR LOADING STATES
+  // ════════════════════════════════════════════════════════════════════════
+
+  AsyncResult<List<Todo>, TodoNotifierError> getTodos() async {
+    state = state.copyWith(isLoadingTodos: true);
+    final serviceResult = await _todoService.getTodos();
+    return serviceResult
+        .onOk((todos) => state = state.copyWith(
+              todos: todos,
+              isInitialised: true,
+              isLoadingTodos: false,
+            ))
+        .onError((_) => state = state.copyWith(isLoadingTodos: false))
+        .mapError((_) => TodoNotifierError.getTodosError);
+  }
+
+  AsyncResult<Todo, TodoNotifierError> addTodo(String title) async {
+    state = state.copyWith(isAddingTodo: true);
+    final serviceResult = await _todoService.addTodo(title);
+    return serviceResult
+        .onOk(
+          (todo) => state = state.copyWith(
+            todos: [...state.todos, todo],
+            isAddingTodo: false,
+          ),
+        )
+        .onError((_) => state = state.copyWith(isAddingTodo: false))
+        .mapError((_) => TodoNotifierError.addTodoError);
   }
 }
 
@@ -250,7 +402,12 @@ class CounterNotifier extends StateNotifier<CounterState> {
 //  ERRORS
 // ══════════════════════════════════════════════════════════════════════════
 
-enum CounterError { incrementFailed }
+enum TodoNotifierError {
+  addTodoError,
+  toggleTodoStatusError,
+  removeTodoError,
+  getTodosError,
+}
 ```
 
 ## API Reference 📚
@@ -302,12 +459,15 @@ class NotifierBuilder extends StatefulWidget {
 
 Check out the comprehensive example in the `example/` directory that demonstrates:
 
-- Global vs scoped notifier behavior
-- Todo application with modern architecture
-- Integration with `flutter_package_result` extension methods
-- Functional programming patterns with `.onOk()`, `.onError()`, `.map()`
-- Clean separation of services, notifiers, and UI layers
-- Automatic lifecycle management
+- **Global vs scoped notifier behavior** - See how different notifier types behave across the app
+- **Todo application with modern architecture** - Complete CRUD operations with proper state management
+- **Integration with `flutter_package_result` extension methods** - Functional programming patterns throughout
+- **Functional programming patterns** - Using `.onOk()`, `.onError()`, `.map()` for clean error handling
+- **Async initialization** - Proper handling of notifier initialization with `isInitialised` flags
+- **Granular loading states** - Fine-grained control over `isLoadingTodos`, `isAddingTodo`, `isTogglingTodo`, `isDeletingTodo`
+- **Clean separation of concerns** - Services, notifiers, and UI layers properly separated
+- **Automatic lifecycle management** - No manual disposal required
+- **Business logic vs page-specific notifiers** - Demonstration of proper architecture patterns
 
 ## Contributing 🤝
 

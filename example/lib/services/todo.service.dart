@@ -20,11 +20,11 @@ class TodoService {
     await Future.delayed(const Duration(milliseconds: 500));
     final index = _todos.indexWhere((todo) => todo.id == id);
 
-    if (index == -1) {
-      return Error(TodoServiceError.notFound);
-    }
+    if (index == -1) return Error(TodoServiceError.notFound);
 
-    final updatedTodo = _todos[index].copyWith(isCompleted: !_todos[index].isCompleted);
+    final updatedTodo = _todos[index].copyWith(
+      isCompleted: !_todos[index].isCompleted,
+    );
     _todos[index] = updatedTodo;
     return Ok(updatedTodo);
   }
