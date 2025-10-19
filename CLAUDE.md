@@ -13,15 +13,13 @@ This document provides comprehensive guidelines for implementing Flutter applica
 flutter pub add get_it
 flutter pub add go_router
 
-# ✅ CORRECT: Use path for local packages
-flutter pub add notifier_scope --path ../flutter_package_notifier_scope/
-flutter pub add result --path ../flutter_package_result/
-
 # ✅ CORRECT: Use git for GitHub packages
 Manually edit `pubspec.yaml` using the `git: https://github.com/p424p242/flutter_package_result.git` syntax.
+Manually edit `pubspec.yaml` using the `git: https://github.com/p424p242/flutter_package_notifier_scope.git` syntax.
 
-# ✅ CORRECT: Use path for GitHub packages
-Manually edit `pubspec.yaml` using the `path: /Users/paka/dev/flutter_package_notifier_scope/` syntax.
+# ✅ CORRECT: Use path for local development (optional)
+flutter pub add notifier_scope --path ../flutter_package_notifier_scope/
+flutter pub add result --path ../flutter_package_result/
 
 **NEVER** manually edit `pubspec.yaml` to add dependencies unless absolutely necessary.
 
@@ -1316,6 +1314,79 @@ class TodoListPage extends StatelessWidget {
 
 ## ✅ Result Package Usage
 
+### Error Handling Patterns: Services vs Notifiers
+
+**ALWAYS** follow these patterns for error handling:
+
+#### Services/Repositories: Use Try/Catch for Error-Prone Operations
+
+```dart
+// ✅ CORRECT: Use try/catch in services for error-prone operations
+class TodoService {
+  final List<Todo> _todos = [];
+
+  AsyncResult<List<Todo>, TodoServiceError> getTodos() async {
+    try {
+      await Future.delayed(const Duration(milliseconds: 500));
+      return Ok(List.unmodifiable(_todos));
+    } catch (e) {
+      return Error(TodoServiceError.unknownError);
+    }
+  }
+
+  AsyncResult<Todo, TodoServiceError> addTodo(String title) async {
+    try {
+      await Future.delayed(const Duration(milliseconds: 500));
+      final newTodo = Todo.create(title: title);
+      _todos.add(newTodo);
+      return Ok(newTodo);
+    } catch (e) {
+      return Error(TodoServiceError.unknownError);
+    }
+  }
+}
+
+enum TodoServiceError { notFound, unknownError }
+```
+
+#### Notifiers: Use Result Extension Methods (No Try/Catch Needed)
+
+**NEVER** use try/catch in notifiers. **ALWAYS** use result extension methods for clean, functional-style error handling:
+
+```dart
+// ✅ CORRECT: Use result extension methods in notifiers (no try/catch)
+import 'package:result/result_extensions.dart';  // Import extension methods
+
+class TodoNotifier extends StateNotifier<TodoState> {
+  TodoNotifier(super.state);
+
+  final _todoService = GetIt.instance<TodoService>();
+
+  AsyncResult<List<Todo>, TodoNotifierError> getTodos() async {
+    state = state.copyWith(isLoading: true);
+    final serviceResult = await _todoService.getTodos();
+    return serviceResult
+        .onOk((todos) => state = state.copyWith(todos: todos, isLoading: false))
+        .onError((_) => state = state.copyWith(isLoading: false))
+        .mapError((_) => TodoNotifierError.getTodosError);
+  }
+
+  AsyncResult<Todo, TodoNotifierError> addTodo(String title) async {
+    state = state.copyWith(isLoading: true);
+    final serviceResult = await _todoService.addTodo(title);
+    return serviceResult
+        .onOk(
+          (todo) => state = state.copyWith(
+            todos: [...state.todos, todo],
+            isLoading: false,
+          ),
+        )
+        .onError((_) => state = state.copyWith(isLoading: false))
+        .mapError((_) => TodoNotifierError.addTodoError);
+  }
+}
+```
+
 ### Core Principle: Extension Methods > Pattern Matching
 
 **NEVER** use Dart pattern matching (`switch` statements) with Result types. **ALWAYS** use extension methods.
@@ -1323,20 +1394,28 @@ class TodoListPage extends StatelessWidget {
 ### Service Layer Pattern
 
 ```dart
-// ✅ CORRECT: Use Result in service layer
+// ✅ CORRECT: Use Result with try/catch in service layer
 class TodoService {
   final List<Todo> _todos = [];
 
   AsyncResult<List<Todo>, TodoServiceError> getTodos() async {
-    await Future.delayed(const Duration(milliseconds: 500));
-    return Ok(List.unmodifiable(_todos));
+    try {
+      await Future.delayed(const Duration(milliseconds: 500));
+      return Ok(List.unmodifiable(_todos));
+    } catch (e) {
+      return Error(TodoServiceError.unknownError);
+    }
   }
 
   AsyncResult<Todo, TodoServiceError> addTodo(String title) async {
-    await Future.delayed(const Duration(milliseconds: 500));
-    final newTodo = Todo.create(title: title);
-    _todos.add(newTodo);
-    return Ok(newTodo);
+    try {
+      await Future.delayed(const Duration(milliseconds: 500));
+      final newTodo = Todo.create(title: title);
+      _todos.add(newTodo);
+      return Ok(newTodo);
+    } catch (e) {
+      return Error(TodoServiceError.unknownError);
+    }
   }
 }
 
@@ -1488,8 +1567,16 @@ class Todo {
 # Add dependencies
 flutter pub add package_name
 
-# Add local packages
+# Add git dependencies (manually edit pubspec.yaml)
+notifier_scope:
+  git: https://github.com/p424p242/flutter_package_notifier_scope.git
+
+result:
+  git: https://github.com/p424p242/flutter_package_result.git
+
+# Add local packages (for development)
 flutter pub add notifier_scope --path ../flutter_package_notifier_scope/
+flutter pub add result --path ../flutter_package_result/
 
 # Run analysis
 flutter analyze
@@ -1518,6 +1605,7 @@ import 'package:notifier_scope/notifier_scope.dart';
 
 // Error Handling
 import 'package:result/result.dart';
+import 'package:result/result_extensions.dart';  // For extension methods
 ```
 
 By following these guidelines, you'll create maintainable, scalable, and error-free Flutter applications with excellent developer experience.
